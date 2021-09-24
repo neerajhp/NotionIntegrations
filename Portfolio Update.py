@@ -1,16 +1,20 @@
 import requests
 
-secret = "your secret"
+# API Endpoints and variables
+secret = "secret_34x8c7nklHcI22r8P6E0OAWeUYd7fYjXOL42GQ1WkzH"
 base_db_url = "https://api.notion.com/v1/databases/"
 base_pg_url = "https://api.notion.com/v1/pages/"
-base_crypto_url = "https://api.coinlore.net/api/tickers/?start=0&limit=100"
+base_crypto_url = "https://api.coinlore.net/api/tickers/"
 base_stock_url = "https://www.shikhersrivastava.com/stocktradingapi/stock/quote?symbol="
 
-wallet_db_id = "id of database Wallet above"
+wallet_db_id = "e475f449040a41ab974dd90195847551"
 data = {}
 header = {"Authorization":secret, "Notion-Version":"2021-05-13", "Content-Type": "application/json"}
 
+# Query Notion database
 response = requests.post(base_db_url + wallet_db_id + "/query", headers=header, data=data)
+
+
 
 for page in response.json()["results"]:
     page_id = page["id"]
@@ -37,10 +41,28 @@ for page in response.json()["results"]:
         print(data_price)
 
     if asset_type == "Crypto":
-        request_by_code = requests.get(base_crypto_url).json()['data']
-    
+
+        #Get ID from table
+        try:
+            crypto_id = props['CoinloreID']['number']
+        #If ID does not exist then find ID with loop
+        except:
+            crypto_id = None
+            api_page = 1
+            while crypto_id == None:
+                request_by_code = requests.get(base_crypto_url + "?start=" + str(api_page * 100) + " &limit=100").json()['data']
+                 #Search for code
+                for item in request_by_code:
+                    if item["symbol"] == asset_code:
+                        crypto_id = item["id"]
+                api_page += 1
+        # Make request for data with ID
+      
+        
+        # Need to make new request if not within first 100 coins
         coin = next((item for item in request_by_code if item["symbol"] == asset_code), None)
-            
+
+         
         if(request_by_code != []):
             price = coin['price_usd']
             price_btc = coin['price_btc'] 
@@ -56,6 +78,6 @@ for page in response.json()["results"]:
                             "% 24H": { "number":' + str(pcent_24h) + '}, \
                             "% 7days": { "number":' + str(pcent_7days) + '}, \
                             "URL": { "url":"' + coin_url + '"}}}'
-
+        
             send_price = requests.patch(base_pg_url + page_id, headers=header, data=data_price)
             
