@@ -4,7 +4,7 @@ import requests
 secret = "secret_34x8c7nklHcI22r8P6E0OAWeUYd7fYjXOL42GQ1WkzH"
 base_db_url = "https://api.notion.com/v1/databases/"
 base_pg_url = "https://api.notion.com/v1/pages/"
-base_crypto_url = "https://api.coinlore.net/api/tickers/"
+base_crypto_url = "https://api.coinlore.net/api/"
 base_stock_url = "https://www.shikhersrivastava.com/stocktradingapi/stock/quote?symbol="
 
 wallet_db_id = "e475f449040a41ab974dd90195847551"
@@ -44,40 +44,48 @@ for page in response.json()["results"]:
 
         #Get ID from table
         try:
-            crypto_id = props['CoinloreID']['number']
+            crypto_id = str(props['CoinloreID']['number'])
         #If ID does not exist then find ID with loop
         except:
             crypto_id = None
-            api_page = 1
+            api_page = 0
             while crypto_id == None:
-                request_by_code = requests.get(base_crypto_url + "?start=" + str(api_page * 100) + " &limit=100").json()['data']
+                #NOT UPDATING  on loop
+                request_by_code = requests.get(base_crypto_url + "tickers/?start=" + str(api_page * 100) + "&limit=100").json()['data']
+                print(base_crypto_url + "tickers/?start=" + str(api_page * 100) + "&limit=100")
                  #Search for code
                 for item in request_by_code:
                     if item["symbol"] == asset_code:
                         crypto_id = item["id"]
                 api_page += 1
         # Make request for data with ID
+        crypto_request = requests.get(base_crypto_url + "ticker/?id=" + crypto_id)
       
         
         # Need to make new request if not within first 100 coins
-        coin = next((item for item in request_by_code if item["symbol"] == asset_code), None)
+        # coin = next((item for item in request_by_code if item["symbol"] == asset_code), None)
 
          
-        if(request_by_code != []):
-            price = coin['price_usd']
-            price_btc = coin['price_btc'] 
-            pcent_1h = coin['percent_change_1h']
-            pcent_24h = coin['percent_change_24h']
-            pcent_7days = coin['percent_change_7d']
-            coin_url = "https://coinmarketcap.com/currencies/" + coin['nameid']
+        if (crypto_request.status_code == 200):
+            coin_info = crypto_request.json()[0]
+            price = coin_info['price_usd']
+            price_btc = coin_info['price_btc'] 
+            pcent_1h = coin_info['percent_change_1h']
+            pcent_24h = coin_info['percent_change_24h']
+            pcent_7days = coin_info['percent_change_7d']
+            coin_url = "https://coinmarketcap.com/currencies/" + coin_info['nameid']
 
+            # OPTIONAL: Add Coin URL
             data_price = '{"properties":   \
-                            {"Price": { "number":' + str(price) + '},\
-                            "price btc": { "number":' + str(price_btc) + '}, \
-                            "% 1H": { "number":' + str(pcent_1h) + '}, \
-                            "% 24H": { "number":' + str(pcent_24h) + '}, \
-                            "% 7days": { "number":' + str(pcent_7days) + '}, \
-                            "URL": { "url":"' + coin_url + '"}}}'
+                            { \
+                                "Price": { "number":' + str(price) + '}, \
+                                "price btc": { "number":' + str(price_btc) + '}, \
+                                "% 1H": { "number":' + str(pcent_1h) + '}, \
+                                "% 24H": { "number":' + str(pcent_24h) + '}, \
+                                "% 7days": { "number":' + str(pcent_7days) + '}, \
+                                "CoinloreID": { "number":' + crypto_id + '} }}'
         
             send_price = requests.patch(base_pg_url + page_id, headers=header, data=data_price)
+     
+
             
