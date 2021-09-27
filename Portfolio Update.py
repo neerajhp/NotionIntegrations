@@ -1,3 +1,5 @@
+#### THANKS TO REDDIT USER VANDERVS FOR PROVIDING THE BONES ####
+
 import requests
 
 # API Endpoints and variables
@@ -5,16 +7,17 @@ secret = "secret_34x8c7nklHcI22r8P6E0OAWeUYd7fYjXOL42GQ1WkzH"
 base_db_url = "https://api.notion.com/v1/databases/"
 base_pg_url = "https://api.notion.com/v1/pages/"
 base_crypto_url = "https://api.coinlore.net/api/"
-base_stock_url = "https://www.shikhersrivastava.com/stocktradingapi/stock/quote?symbol="
+base_stock_url = "https://yh-finance.p.rapidapi.com/stock/v2/get-summary"
 
+
+
+# Notion tokens
 wallet_db_id = "e475f449040a41ab974dd90195847551"
 data = {}
 header = {"Authorization":secret, "Notion-Version":"2021-05-13", "Content-Type": "application/json"}
 
 # Query Notion database
 response = requests.post(base_db_url + wallet_db_id + "/query", headers=header, data=data)
-
-
 
 for page in response.json()["results"]:
     page_id = page["id"]
@@ -24,22 +27,27 @@ for page in response.json()["results"]:
     
     asset_code = props['Code']['rich_text'][0]['plain_text']
 
+    # Common stock listed on the ASX
     if asset_type == "Stock":
-        response = requests.get(base_stock_url + asset_code).json()
-        
-        
-        stock_price = response[asset_code]['latestPrice']
-        pcent_1h = "{:.2f}".format(100*response[asset_code]['changePercent'])
-        pcent_24h = "{:.2f}".format(response[asset_code]['ytdChange'])
 
+        stock_query_string = {"symbol": asset_code + ".AX","region":"AU"}
+        stock_headers = {
+            'x-rapidapi-host': "yh-finance.p.rapidapi.com",
+            'x-rapidapi-key': "38dec3dd7fmsh61b634794660a47p1893fdjsnc0e2b1e534e9"
+        }
+        response = requests.request("GET", base_stock_url, headers=stock_headers, params=stock_query_string).json()
+       
+        stock_price = response['price']['regularMarketPrice']['raw']
+        stock_open_price  = response['price']['regularMarketOpen']['raw']
+
+        # Format for notion database
         data_price = '{"properties": {"Price": { "number":' + str(stock_price) + '},\
-                                        "% 1H": { "number":' + str(pcent_1h) + '}, \
-                                        "% 24H": { "number":' + str(pcent_24h) + '}, \
-                                        "URL": { "url": "https://finance.yahoo.com/quote/' + asset_code + '"}}}'
-                                        
+                                        "Market Open": { "number":' + str(stock_open_price) + '}, \
+                                        "URL": { "url": "https://finance.yahoo.com/quote/' + asset_code + '.AX"}}}'
+        # Send to notion database                        
         send_price = requests.patch(base_pg_url + page_id, headers=header, data=data_price)
-        print(data_price)
 
+    # Crypto stock 
     if asset_type == "Crypto":
 
         #Get ID from table
@@ -75,7 +83,7 @@ for page in response.json()["results"]:
             pcent_7days = coin_info['percent_change_7d']
             coin_url = "https://coinmarketcap.com/currencies/" + coin_info['nameid']
 
-            # OPTIONAL: Add Coin URL
+            # Format for notion database
             data_price = '{"properties":   \
                             { \
                                 "Price": { "number":' + str(price) + '}, \
@@ -83,8 +91,9 @@ for page in response.json()["results"]:
                                 "% 1H": { "number":' + str(pcent_1h) + '}, \
                                 "% 24H": { "number":' + str(pcent_24h) + '}, \
                                 "% 7days": { "number":' + str(pcent_7days) + '}, \
-                                "CoinloreID": { "number":' + crypto_id + '} }}'
-        
+                                "CoinloreID": { "number":' + crypto_id + '}, \
+                                "URL": { "url": "https://coinmarketcap.com/currencies/' + coin_info['nameid'] + '"}}}'
+            # Send to notion database
             send_price = requests.patch(base_pg_url + page_id, headers=header, data=data_price)
      
 
