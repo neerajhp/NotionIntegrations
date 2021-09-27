@@ -1,9 +1,13 @@
 #### THANKS TO REDDIT USER VANDERVS FOR PROVIDING THE BONES ####
 
 import requests
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # API Endpoints and variables
-secret = "secret_34x8c7nklHcI22r8P6E0OAWeUYd7fYjXOL42GQ1WkzH"
+secret = os.getenv("NOTION_SECRET")
 base_db_url = "https://api.notion.com/v1/databases/"
 base_pg_url = "https://api.notion.com/v1/pages/"
 base_crypto_url = "https://api.coinlore.net/api/"
@@ -12,7 +16,7 @@ base_stock_url = "https://yh-finance.p.rapidapi.com/stock/v2/get-summary"
 
 
 # Notion tokens
-wallet_db_id = "e475f449040a41ab974dd90195847551"
+wallet_db_id = os.getenv("FINANCE_DB_ID")
 data = {}
 header = {"Authorization":secret, "Notion-Version":"2021-05-13", "Content-Type": "application/json"}
 
@@ -33,7 +37,7 @@ for page in response.json()["results"]:
         stock_query_string = {"symbol": asset_code + ".AX","region":"AU"}
         stock_headers = {
             'x-rapidapi-host': "yh-finance.p.rapidapi.com",
-            'x-rapidapi-key': "38dec3dd7fmsh61b634794660a47p1893fdjsnc0e2b1e534e9"
+            'x-rapidapi-key': os.getenv("RAPID_API_KEY")
         }
         response = requests.request("GET", base_stock_url, headers=stock_headers, params=stock_query_string).json()
        
