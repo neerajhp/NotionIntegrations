@@ -15,6 +15,7 @@ base_stock_url = "https://yh-finance.p.rapidapi.com/stock/v2/get-summary"
 
 
 
+
 # Notion tokens
 wallet_db_id = os.getenv("FINANCE_DB_ID")
 data = {}
@@ -22,6 +23,15 @@ header = {"Authorization":secret, "Notion-Version":"2021-05-13", "Content-Type":
 
 # Query Notion database
 response = requests.post(base_db_url + wallet_db_id + "/query", headers=header, data=data)
+
+# Query forex data (AUD to USD)
+forex_query_string = {"symbol": "AUDUSD=X","region":"AU"}
+stock_headers = {
+    'x-rapidapi-host': "yh-finance.p.rapidapi.com",
+    'x-rapidapi-key': os.getenv("RAPID_API_KEY")
+}
+forex_response = requests.request("GET", base_stock_url, headers=stock_headers, params=forex_query_string).json()
+aud_to_usd = forex_response['price']['regularMarketPrice']['raw']
 
 for page in response.json()["results"]:
     page_id = page["id"]
@@ -80,7 +90,7 @@ for page in response.json()["results"]:
          
         if (crypto_request.status_code == 200):
             coin_info = crypto_request.json()[0]
-            price = coin_info['price_usd']
+            price = float(coin_info['price_usd']) / aud_to_usd
             price_btc = coin_info['price_btc'] 
             pcent_1h = coin_info['percent_change_1h']
             pcent_24h = coin_info['percent_change_24h']
