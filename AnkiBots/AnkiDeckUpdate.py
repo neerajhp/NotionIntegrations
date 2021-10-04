@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 from re import match
 
 
-DEBUG = False
+DEBUG = True
 
 
 # Load environment variables
@@ -88,7 +88,7 @@ def createPayload(question, answer):
        
         elif content["type"] == "image":
             # Image URL 
-            payload["picture"] = [{"url": content["image"]["file"]["url"], "fields": ["Back"]}]
+            payload["picture"] = [{"url": content["image"]["file"]["url"], "filename": content["image"]["caption"][0]["text"]["content"] + '.png' ,"fields":  ["Back"]}]
             
         # Add break in body
         body += '\n'
@@ -111,8 +111,16 @@ def createCard(payload):
         print(response['error'])
     return response['result']
 
+#************** Main **************#
 
-# Get Page 
+if DEBUG:
+    f = open("AnkiBots/output.txt", "w")
+
+
+# Open Anki
+os.system("open /Applications/Anki.app")
+
+# Get notion Page
 try:
     response = requests.get(baseNotionURL + javaFundamentalsPage + "/children", headers=header, data=data)
     response.raise_for_status()
@@ -168,11 +176,10 @@ for toggle in toggleContent:
         #Post to ANKI server
         createCard(newCard)
         if DEBUG:
-            f = open("AnkiBots/output.txt", "a")
             f.write(newCard["params"]["note"]["fields"]["Front"] + "\n" + newCard["params"]["note"]["fields"]["Back"])
             json.dump(newCard, f)
             f.write("\n\n")
-            f.close()
+           
     except requests.exceptions.HTTPError as errh:
             print(errh)
             pass
@@ -186,12 +193,9 @@ for toggle in toggleContent:
             print(err)
             pass
 
+print("\nAll Done!\n")
 
-
-#Use python to open ANKI
-#Connect to ANKI
-#Download existing decks?
-#Compare JSON payload to existing?
-
-##Upload cards to deck 
-
+if DEBUG:
+    f.close()
+# # Close Anki
+# os.system("pkill Anki")
