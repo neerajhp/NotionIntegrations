@@ -7,7 +7,29 @@ from re import match
 
 DEBUG = False
 
+
+# Load environment variables
+load_dotenv()
+
+#ANKI server properties
+ankiServerURL = "http://127.0.0.1:8765/"
+DECK = "CS"
+
+#Connect to Notion
+# API Endpoints and variables
+secret = os.getenv("NOTION_SECRET")
+baseNotionURL = "https://api.notion.com/v1/blocks/"
+data = {}
+header = {"Authorization":secret, "Notion-Version":"2021-05-13", "Content-Type": "application/json"}
+
+#Get Pages
+javaFundamentalsPage = os.getenv("JAVA_FUNDAMENTALS_ID")
+
+
+#************** HELPERS **************# 
+
 def stringFormatter(contentArray):
+    """Transform Notion rich text into html for ANKI"""
     string = ""
     for content in contentArray:
         if content["annotations"]["bold"]:
@@ -76,20 +98,18 @@ def createPayload(question, answer):
 
     return payload
 
-
-
-# Load environment variables
-load_dotenv()
-
-#Connect to Notion
-# API Endpoints and variables
-secret = os.getenv("NOTION_SECRET")
-baseNotionURL = "https://api.notion.com/v1/blocks/"
-data = {}
-header = {"Authorization":secret, "Notion-Version":"2021-05-13", "Content-Type": "application/json"}
-
-#Get Pages
-javaFundamentalsPage = os.getenv("JAVA_FUNDAMENTALS_ID")
+def createCard(payload):
+    """ ANKI api request to add card to deck """
+    response = requests.post(ankiServerURL, json=payload).json()
+    if len(response) != 2:
+        print('response has an unexpected number of fields')
+    if 'error' not in response:
+        print('response is missing required error field')
+    if 'result' not in response:
+        print('response is missing required result field')
+    if response['error'] is not None:
+        print(response['error'])
+    return response['result']
 
 
 # Get Page 
@@ -145,7 +165,8 @@ for toggle in toggleContent:
         toggleAnswer = response["results"]
         #Create ANKI Payload
         newCard = createPayload(toggleQuestion, toggleAnswer)
-
+        #Post to ANKI server
+        createCard(newCard)
         if DEBUG:
             f = open("AnkiBots/output.txt", "a")
             f.write(newCard["params"]["note"]["fields"]["Front"] + "\n" + newCard["params"]["note"]["fields"]["Back"])
