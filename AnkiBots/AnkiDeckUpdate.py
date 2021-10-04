@@ -4,15 +4,26 @@ import os
 from dotenv import load_dotenv
 from re import match
 
+
+DEBUG = False
+
 def stringFormatter(contentArray):
     string = ""
     for content in contentArray:
-        string += content["plain_text"]
+        if content["annotations"]["bold"]:
+            string += "<b>" + content["plain_text"] + "</b>"
+        elif content["annotations"]["italic"]:
+            string += "<i>" + content["plain_text"] + "</i>"
+        elif content["annotations"]["code"]:
+            string += "<code>" + content["plain_text"] + "</code>"
+        else: 
+            string += content["plain_text"]
+        
     return string
 
 
 def createPayload(question, answer):
-    """ Convert Notion data to  ANKI JSON payload """
+    """ Convert Notion data to  ANKI JSON payload. Only body is formatted. String formatting is handled by the stringFormatter function. """
     payload = {
     "action": "addNote",
     "version": 6,
@@ -44,23 +55,24 @@ def createPayload(question, answer):
 
     #Update Question
     payload["params"]["note"]["fields"]["Front"] = stringFormatter(question)
-    print(payload["params"]["note"]["fields"]["Front"] + "\n")
+   
 
     for content in answer:
         if content["type"] == "paragraph":
             body += stringFormatter(content["paragraph"]["text"])
         elif content["type"] == "bulleted_list_item":
             #Format bulleted List
-            body +='<ul>'
-            for bullet in answer:
-                body += "<li>" + stringFormatter(bullet["bulleted_list_item"]["text"]) + "</li>"
-            body += '</ul>'
+            body += "<ul><li>" + stringFormatter(content["bulleted_list_item"]["text"]) + "</li></ul>"
+       
         elif content["type"] == "image":
             # Image URL 
-            payload["picture"] = [{"url" : content["image"]["file"]["url"], "fields": ["Back"]}]
-       
-        # Add to payload
-        payload["params"]["note"]["fields"]["Back"] += body  + '\n'
+            payload["picture"] = [{"url": content["image"]["file"]["url"], "fields": ["Back"]}]
+            
+        # Add break in body
+        body += '\n'
+
+    # Add to payload
+    payload["params"]["note"]["fields"]["Back"] += body  + '\n'
 
     return payload
 
@@ -133,7 +145,13 @@ for toggle in toggleContent:
         toggleAnswer = response["results"]
         #Create ANKI Payload
         newCard = createPayload(toggleQuestion, toggleAnswer)
-        print(newCard["params"]["note"]["fields"]["Front"] + "\n" +newCard["params"]["note"]["fields"]["Back"])
+
+        if DEBUG:
+            f = open("AnkiBots/output.txt", "a")
+            f.write(newCard["params"]["note"]["fields"]["Front"] + "\n" + newCard["params"]["note"]["fields"]["Back"])
+            json.dump(newCard, f)
+            f.write("\n\n")
+            f.close()
     except requests.exceptions.HTTPError as errh:
             print(errh)
             pass
