@@ -19,17 +19,46 @@ DECK = "CS"
 
 #Connect to Notion
 # API Endpoints and variables
-secret = os.getenv("NOTION_SECRET")
+SECRET = os.getenv("NOTION_SECRET")
 baseNotionURL = "https://api.notion.com/v1/blocks/"
-data = {}
-header = {"Authorization":secret, "Notion-Version":"2021-05-13", "Content-Type": "application/json"}
+HEADER = {"Authorization": SECRET, "Notion-Version":"2021-05-13", "Content-Type": "application/json"}
 DATABASES = [{"Database":os.getenv("JAVA_FUNDAMENTALS_ID"), "cardTag": "JavaFundamentals"},{"Database":os.getenv("AWS_ID"), "cardTag": "AWS"}]
 
-#Get Pages
-javaFundamentalsPage = os.getenv("JAVA_FUNDAMENTALS_ID")
+
 
 
 #************** HELPERS **************# 
+
+def getNotionPage(id):
+    """Notion API to get blocks from page. Limited to 100 results"""
+    response = None
+    pageContent = []
+    params = {}
+
+    while (response is None or response.json()["has_more"]):
+        #If more content need to add to query parameters
+        if response is not None:
+            params = {"start_cursor": response.json()["start_cursor"]} 
+        try:
+            response = requests.get(baseNotionURL + id + "/children", headers=HEADER, data={}, params=params)
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as errh:
+            print("There was an error with Notion")
+            pass
+        except requests.exceptions.ConnectionError as errc:
+            print(errc)
+            pass
+        except requests.exceptions.Timeout as errt:
+            print(errt)
+            pass
+        except requests.exceptions.RequestException as err:
+            print(err)
+            pass
+        x = response.json()
+        pageContent += response.json()["results"]
+    
+    return pageContent
+
 
 def stringFormatter(contentArray):
     """Transform Notion rich text into html for ANKI"""
@@ -127,29 +156,16 @@ os.system("open /Applications/Anki.app")
 
 for notionPage in DATABASES: 
 
-    # Get notion Page
-    try:
-        response = requests.get(baseNotionURL + notionPage["Database"] + "/children", headers=header, data=data)
-        response.raise_for_status()
-    except requests.exceptions.HTTPError as errh:
-        print("There was an error with Notion")
-        pass
-    except requests.exceptions.ConnectionError as errc:
-        print(errc)
-        pass
-    except requests.exceptions.Timeout as errt:
-        print(errt)
-        pass
-    except requests.exceptions.RequestException as err:
-        print(err)
-        pass
+    #Get Notion Page
+    response = getNotionPage(notionPage["Database"])
+    pageContent = response
+    
 
     # Recursively get all page content
-    pageContent = response.json()["results"]
     for block in pageContent:
         if block['has_children'] == True:
             try:
-                response = requests.get(baseNotionURL + block['id'] + "/children", headers=header, data=data)
+                response = requests.get(baseNotionURL + block['id'] + "/children", headers=HEADER, data={})
                 response.raise_for_status()
                 pageContent += response.json()["results"]
             except requests.exceptions.HTTPError as errh:
@@ -175,7 +191,7 @@ for notionPage in DATABASES:
         toggleQuestion = toggle["toggle"]["text"]
         try:
             #Get toggle body (the answer)
-            response = requests.get(baseNotionURL + toggle['id'] + "/children", headers=header, data=data).json()
+            response = requests.get(baseNotionURL + toggle['id'] + "/children", headers=HEADER, data={}).json()
             #Format body content into valid ANKI payload
             toggleAnswer = response["results"]
             #Create ANKI Payload
