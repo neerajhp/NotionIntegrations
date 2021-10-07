@@ -31,16 +31,16 @@ DATABASES = [{"Database":os.getenv("JAVA_FUNDAMENTALS_ID"), "cardTag": "JavaFund
 
 def getNotionPage(id):
     """Notion API to get blocks from page. Limited to 100 results"""
-    response = None
+    getPage = True
+    responseJSON = {"has_more" : False, "start_cursor": None}
     pageContent = []
     params = {}
 
-    while (response is None or response.json()["has_more"]):
-        #If more content need to add to query parameters
-        if response is not None:
-            params = {"start_cursor": response.json()["start_cursor"]} 
+    while (getPage):
+
         try:
             response = requests.get(baseNotionURL + id + "/children", headers=HEADER, data={}, params=params)
+            responseJSON = response.json()
             response.raise_for_status()
         except requests.exceptions.HTTPError as errh:
             print("There was an error with Notion")
@@ -54,8 +54,17 @@ def getNotionPage(id):
         except requests.exceptions.RequestException as err:
             print(err)
             pass
-        x = response.json()
-        pageContent += response.json()["results"]
+       
+
+        # Check for pagination
+        if responseJSON["has_more"]:
+            params["start_cursor"] =  responseJSON["next_cursor"]
+            getPage = True
+        else:
+            getPage = False
+                
+        x = responseJSON
+        pageContent += responseJSON["results"]
     
     return pageContent
 
