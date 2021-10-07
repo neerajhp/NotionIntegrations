@@ -2,11 +2,13 @@ import requests
 import json
 import os
 from dotenv import load_dotenv
-from re import match
+from pathlib import Path
 
 
-DEBUG = True
 
+#************** CONSTANTS **************#
+
+DEBUG = False
 
 # Load environment variables
 load_dotenv()
@@ -21,6 +23,7 @@ secret = os.getenv("NOTION_SECRET")
 baseNotionURL = "https://api.notion.com/v1/blocks/"
 data = {}
 header = {"Authorization":secret, "Notion-Version":"2021-05-13", "Content-Type": "application/json"}
+DATABASES = [{"Database":os.getenv("JAVA_FUNDAMENTALS_ID"), "cardTag": "JavaFundamentals"},{"Database":os.getenv("AWS_ID"), "cardTag": "AWS"}]
 
 #Get Pages
 javaFundamentalsPage = os.getenv("JAVA_FUNDAMENTALS_ID")
@@ -44,14 +47,14 @@ def stringFormatter(contentArray):
     return string
 
 
-def createPayload(question, answer):
+def createPayload(question, answer, tag):
     """ Convert Notion data to  ANKI JSON payload. Only body is formatted. String formatting is handled by the stringFormatter function. """
     payload = {
     "action": "addNote",
     "version": 6,
     "params": {
         "note": {
-            "deckName": "Default",
+            "deckName": DECK,
             "modelName": "Basic",
             "fields": {
                 "Front": "",
@@ -61,13 +64,13 @@ def createPayload(question, answer):
                 "allowDuplicate": False,
                 "duplicateScope": "deck",
                 "duplicateScopeOptions": {
-                    "deckName": "Default",
+                    "deckName": DECK,
                     "checkChildren": False,
                     "checkAllModels": False
                 }
             },
             "tags": [
-                "JavaFundamentals"
+                tag
             ],}
     }
     }
@@ -111,89 +114,99 @@ def createCard(payload):
         print(response['error'])
     return response['result']
 
-#************** Main **************#
+#************** MAIN **************#
 
 if DEBUG:
-    f = open("AnkiBots/output.txt", "w")
+    __location__ = os.path.realpath(
+    os.path.join(os.getcwd(), os.path.dirname(__file__)))
+    f = open(os.path.join(__location__, "./output.txt"), "w")
 
 
 # Open Anki
 os.system("open /Applications/Anki.app")
 
-# Get notion Page
-try:
-    response = requests.get(baseNotionURL + javaFundamentalsPage + "/children", headers=header, data=data)
-    response.raise_for_status()
-except requests.exceptions.HTTPError as errh:
-    print("There was an error with Notion")
-    pass
-except requests.exceptions.ConnectionError as errc:
-    print(errc)
-    pass
-except requests.exceptions.Timeout as errt:
-    print(errt)
-    pass
-except requests.exceptions.RequestException as err:
-    print(err)
-    pass
+for notionPage in DATABASES: 
 
-# Recursively get all page content
-pageContent = response.json()["results"]
-for block in pageContent:
-    if block['has_children'] == True:
-        try:
-            response = requests.get(baseNotionURL + block['id'] + "/children", headers=header, data=data)
-            response.raise_for_status()
-            pageContent += response.json()["results"]
-        except requests.exceptions.HTTPError as errh:
-            print(errh)
-            pass
-        except requests.exceptions.ConnectionError as errc:
-            print(errc)
-            pass
-        except requests.exceptions.Timeout as errt:
-            print(errt)
-            pass
-        except requests.exceptions.RequestException as err:
-            print(err)
-            pass
-
-# Filter toggle content 
-toggleContent = [block for block in pageContent if block['type'] == 'toggle']
-print("Successfully got toggles from Notion.")
-
-#Convert toggle lists to JSON payload
-for toggle in toggleContent:
-    #Get toggle header (the question)
-    toggleQuestion = toggle["toggle"]["text"]
+    # Get notion Page
     try:
-        #Get toggle body (the answer)
-        response = requests.get(baseNotionURL + toggle['id'] + "/children", headers=header, data=data).json()
-        #Format body content into valid ANKI payload
-        toggleAnswer = response["results"]
-        #Create ANKI Payload
-        newCard = createPayload(toggleQuestion, toggleAnswer)
-        #Post to ANKI server
-        createCard(newCard)
-        if DEBUG:
-            f.write(newCard["params"]["note"]["fields"]["Front"] + "\n" + newCard["params"]["note"]["fields"]["Back"])
-            json.dump(newCard, f)
-            f.write("\n\n")
-           
+        response = requests.get(baseNotionURL + notionPage["Database"] + "/children", headers=header, data=data)
+        response.raise_for_status()
     except requests.exceptions.HTTPError as errh:
-            print(errh)
-            pass
+        print("There was an error with Notion")
+        pass
     except requests.exceptions.ConnectionError as errc:
-            print(errc)
-            pass
+        print(errc)
+        pass
     except requests.exceptions.Timeout as errt:
-            print(errt)
-            pass
+        print(errt)
+        pass
     except requests.exceptions.RequestException as err:
-            print(err)
-            pass
+        print(err)
+        pass
 
-print("\nAll Done!\n")
+    # Recursively get all page content
+    pageContent = response.json()["results"]
+    for block in pageContent:
+        if block['has_children'] == True:
+            try:
+                response = requests.get(baseNotionURL + block['id'] + "/children", headers=header, data=data)
+                response.raise_for_status()
+                pageContent += response.json()["results"]
+            except requests.exceptions.HTTPError as errh:
+                print(errh)
+                pass
+            except requests.exceptions.ConnectionError as errc:
+                print(errc)
+                pass
+            except requests.exceptions.Timeout as errt:
+                print(errt)
+                pass
+            except requests.exceptions.RequestException as err:
+                print(err)
+                pass
+
+    # Filter toggle content 
+    toggleContent = [block for block in pageContent if block['type'] == 'toggle']
+    print("Successfully got toggles from Notion.")
+
+    #Convert toggle lists to JSON payload
+    for toggle in toggleContent:
+        #Get toggle header (the question)
+        toggleQuestion = toggle["toggle"]["text"]
+        try:
+            #Get toggle body (the answer)
+            response = requests.get(baseNotionURL + toggle['id'] + "/children", headers=header, data=data).json()
+            #Format body content into valid ANKI payload
+            toggleAnswer = response["results"]
+            #Create ANKI Payload
+            newCard = createPayload(toggleQuestion, toggleAnswer, notionPage["cardTag"])
+            #Post to ANKI server
+            ankiResponse = createCard(newCard)
+            if ankiResponse is not None:
+                print("\n+\t" +
+                newCard["params"]["note"]["fields"]["Front"] + '\n' +
+                '\t' + newCard["params"]["note"]["fields"]["Back"] + '\n')
+            if DEBUG:
+                f.write(newCard["params"]["note"]["fields"]["Front"] + "\n" + newCard["params"]["note"]["fields"]["Back"])
+                json.dump(newCard, f)
+                f.write("\n\n")
+            
+        except requests.exceptions.HTTPError as errh:
+                print(errh)
+                pass
+        except requests.exceptions.ConnectionError as errc:
+                print(errc)
+                pass
+        except requests.exceptions.Timeout as errt:
+                print(errt)
+                pass
+        except requests.exceptions.RequestException as err:
+                print(err)
+                pass
+        
+    print("\n" + notionPage["cardTag"] + " done.\n" )
+
+print("\nALL DONE!\n")
 
 if DEBUG:
     f.close()
