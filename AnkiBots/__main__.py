@@ -148,92 +148,121 @@ def createCard(payload):
         print('response is missing required error field')
     if 'result' not in response:
         print('response is missing required result field')
-    if response['error'] is not None:
-        print(response['error'])
-    return response['result']
+    
+    return response
 
 #************** MAIN **************#
 
-if DEBUG:
-    __location__ = os.path.realpath(
-    os.path.join(os.getcwd(), os.path.dirname(__file__)))
-    f = open(os.path.join(__location__, "./output.txt"), "w")
+def main():
+    if DEBUG:
+        __location__ = os.path.realpath(
+        os.path.join(os.getcwd(), os.path.dirname(__file__)))
+        f = open(os.path.join(__location__, "./output.txt"), "w")
 
 
-# Open Anki
-os.system("open /Applications/Anki.app")
+    # Open Anki
+    os.system("open /Applications/Anki.app")
 
-for notionPage in DATABASES: 
+    for notionPage in DATABASES: 
 
-    #Get Notion Page
-    response = getNotionPage(notionPage["Database"])
-    pageContent = response
-    
-
-    # Recursively get all page content
-    for block in pageContent:
-        if block['has_children'] == True:
-            try:
-                response = requests.get(baseNotionURL + block['id'] + "/children", headers=HEADER, data={})
-                response.raise_for_status()
-                pageContent += response.json()["results"]
-            except requests.exceptions.HTTPError as errh:
-                print(errh)
-                pass
-            except requests.exceptions.ConnectionError as errc:
-                print(errc)
-                pass
-            except requests.exceptions.Timeout as errt:
-                print(errt)
-                pass
-            except requests.exceptions.RequestException as err:
-                print(err)
-                pass
-
-    # Filter toggle content 
-    toggleContent = [block for block in pageContent if block['type'] == 'toggle']
-    print("Successfully got toggles from Notion.")
-
-    #Convert toggle lists to JSON payload
-    for toggle in toggleContent:
-        #Get toggle header (the question)
-        toggleQuestion = toggle["toggle"]["text"]
-        try:
-            #Get toggle body (the answer)
-            response = requests.get(baseNotionURL + toggle['id'] + "/children", headers=HEADER, data={}).json()
-            #Format body content into valid ANKI payload
-            toggleAnswer = response["results"]
-            #Create ANKI Payload
-            newCard = createPayload(toggleQuestion, toggleAnswer, notionPage["cardTag"])
-            #Post to ANKI server
-            ankiResponse = createCard(newCard)
-            if ankiResponse is not None:
-                print("\n+\t" +
-                newCard["params"]["note"]["fields"]["Front"] + '\n' +
-                '\t' + newCard["params"]["note"]["fields"]["Back"] + '\n')
-            if DEBUG:
-                f.write(newCard["params"]["note"]["fields"]["Front"] + "\n" + newCard["params"]["note"]["fields"]["Back"])
-                json.dump(newCard, f)
-                f.write("\n\n")
-            
-        except requests.exceptions.HTTPError as errh:
-                print(errh)
-                pass
-        except requests.exceptions.ConnectionError as errc:
-                print(errc)
-                pass
-        except requests.exceptions.Timeout as errt:
-                print(errt)
-                pass
-        except requests.exceptions.RequestException as err:
-                print(err)
-                pass
+        #Get Notion Page
+        response = getNotionPage(notionPage["Database"])
+        pageContent = response
         
-    print("\n" + notionPage["cardTag"] + " done.\n" )
 
-print("\nALL DONE!\n")
+        # Recursively get all page content
+        for block in pageContent:
+            if block['has_children'] == True:
+                try:
+                    response = requests.get(baseNotionURL + block['id'] + "/children", headers=HEADER, data={})
+                    response.raise_for_status()
+                    pageContent += response.json()["results"]
+                except requests.exceptions.HTTPError as errh:
+                    print(errh)
+                    pass
+                except requests.exceptions.ConnectionError as errc:
+                    print(errc)
+                    pass
+                except requests.exceptions.Timeout as errt:
+                    print(errt)
+                    pass
+                except requests.exceptions.RequestException as err:
+                    print(err)
+                    pass
 
-if DEBUG:
-    f.close()
-# # Close Anki
-# os.system("pkill Anki")
+        # Filter toggle content 
+        toggleContent = [block for block in pageContent if block['type'] == 'toggle']
+        print("Successfully got toggles from Notion.")
+
+        #Anki properties to report
+        totalCards = len(toggleContent)
+        duplicateCards = 0
+        newCards = 0
+        cardsAdded = []
+
+
+        #Convert toggle lists to JSON payload
+        for toggle in toggleContent:
+            #Get toggle header (the question)
+            toggleQuestion = toggle["toggle"]["text"]
+            try:
+                #Get toggle body (the answer)
+                response = requests.get(baseNotionURL + toggle['id'] + "/children", headers=HEADER, data={}).json()
+                #Format body content into valid ANKI payload
+                toggleAnswer = response["results"]
+                #Create ANKI Payload
+                newCard = createPayload(toggleQuestion, toggleAnswer, notionPage["cardTag"])
+                #Post to ANKI server
+                ankiResponse = createCard(newCard)
+                if ankiResponse['error'] is not None:
+                    duplicateCards += 1
+                else:
+                    newCards += 1
+                    cardsAdded.append([newCard["params"]["note"]["fields"]["Front"] ,newCard["params"]["note"]["fields"]["Back"]])
+                    
+                if DEBUG:
+                    f.write(newCard["params"]["note"]["fields"]["Front"] + "\n" + newCard["params"]["note"]["fields"]["Back"])
+                    json.dump(newCard, f)
+                    f.write("\n\n")
+                
+            except requests.exceptions.HTTPError as errh:
+                    print(errh)
+                    pass
+            except requests.exceptions.ConnectionError as errc:
+                    print(errc)
+                    pass
+            except requests.exceptions.Timeout as errt:
+                    print(errt)
+                    pass
+            except requests.exceptions.RequestException as err:
+                    print(err)
+                    pass
+            
+        print("\n" + notionPage["cardTag"] + " tags done.\n")
+        print("\tTotal number of toggles detected: " + str(totalCards))
+        print("\tNumber of duplicate cards: " + str(duplicateCards) )
+        print("\tNumber of new cards: " + str(newCards) )
+        if len(cardsAdded) > 0:
+            print("\tCards Added: ")
+            for card in cardsAdded:
+                print("\n\n\t" + card[0] + "\n\t" + card[1])
+
+    print("\nALL DONE!\n")
+
+    if DEBUG:
+        f.close()
+    # # Close Anki
+    # os.system("pkill Anki")
+
+
+if __name__ == '__main__':
+    PROFILER = False
+    if PROFILER:
+        import cProfile, pstats
+        profiler = cProfile.Profile()
+        profiler.enable()
+        main()
+        stats = pstats.Stats(profiler).sort_stats('ncalls')
+        stats.print_stats()
+    else:
+        main()
