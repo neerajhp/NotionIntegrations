@@ -1,5 +1,6 @@
 import requests
 import json
+import time
 import os
 from dotenv import load_dotenv
 from pathlib import Path
@@ -84,6 +85,26 @@ def stringFormatter(contentArray):
         
     return string
 
+def downloadMedia(url, filename):
+    """ ANKI api request to download media. Filename is usually block-id from notion concatenated with file type."""
+    payload =  {
+        "action": "storeMediaFile",
+        "params": {
+          "filename": filename ,
+          "url": url
+        }
+    }
+    response = requests.post(ankiServerURL, json=payload).json()
+    if len(response) != 2:
+        print('response has an unexpected number of fields')
+    if 'error' not in response:
+        print('response is missing required error field')
+    if 'result' not in response:
+        print('response is missing required result field')
+    
+    return response
+   
+
 
 def createPayload(question, answer, tag):
     """ Convert Notion data to  ANKI JSON payload. Only body is formatted. String formatting is handled by the stringFormatter function. """
@@ -126,10 +147,21 @@ def createPayload(question, answer, tag):
         elif content["type"] == "bulleted_list_item":
             #Format bulleted List
             body += "<ul><li>" + stringFormatter(content["bulleted_list_item"]["text"]) + "</li></ul>"
+        elif content["type"] == "numbered_list_item":
+            #Format bulleted List
+            if body.endswith("</ol>\n"):
+                body = body.replace("</ol>\n", "")
+                body += "<li>" + stringFormatter(content["numbered_list_item"]["text"]) + "</li></ol>"
+            else:
+                body += "<ol><li>" + stringFormatter(content["numbered_list_item"]["text"]) + "</li></ol>"
        
         elif content["type"] == "image":
-            # Image URL 
-            payload["picture"] = [{"url": content["image"]["file"]["url"], "filename": content["image"]["caption"][0]["text"]["content"] + '.png' ,"fields":  ["Back"]}]
+            # Download Image to Anki Storage
+            filename = content['id'] + ".png"
+            downloadMedia(content["image"]["file"]["url"], filename )
+            # Add image to body
+            body += "<br><img src='" + filename + "'>"
+            
             
         # Add break in body
         body += '\n'
@@ -192,7 +224,7 @@ def main():
 
         # Filter toggle content 
         toggleContent = [block for block in pageContent if block['type'] == 'toggle']
-        print("Successfully got toggles from Notion.")
+        print("Successfully got toggle lists from " + notionPage["cardTag"] + " page on Notion.")
 
         #Anki properties to report
         totalCards = len(toggleContent)
@@ -229,7 +261,8 @@ def main():
                     print(errh)
                     pass
             except requests.exceptions.ConnectionError as errc:
-                    print(errc)
+                    print("Connecton Refused")
+                    time.sleep(2)
                     pass
             except requests.exceptions.Timeout as errt:
                     print(errt)
